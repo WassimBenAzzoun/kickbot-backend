@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kickbot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kickbot
+      POSTGRES_PASSWORD: kickbot
+      POSTGRES_DB: kickbot
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kickbot -d kickbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kickbot-migrate
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://kickbot:kickbot@postgres:5432/kickbot?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npm", "run", "prisma:migrate:deploy"]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kickbot-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://kickbot:kickbot@postgres:5432/kickbot?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["npm", "run", "start:api"]
+    ports:
+      - "4000:4000"
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kickbot-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://kickbot:kickbot@postgres:5432/kickbot?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["npm", "run", "start:bot"]
+
+volumes:
+  postgres_data:

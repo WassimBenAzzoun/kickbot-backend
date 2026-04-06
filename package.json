@@ -1,0 +1,46 @@
+{
+  "name": "kick-discord-notifier-bot",
+  "version": "1.0.0",
+  "description": "Production-ready Discord bot for Kick livestream notifications",
+  "main": "dist/src/index.js",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:bot",
+    "dev:bot": "tsx watch src/index.ts",
+    "dev:api": "tsx watch src/api/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run start:bot",
+    "start:bot": "node dist/src/index.js",
+    "start:api": "node dist/src/api/main.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "register:commands": "tsx scripts/register-commands.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.0.2",
+    "@fastify/cors": "11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "10.3.0",
+    "@prisma/client": "6.19.3",
+    "axios": "1.14.0",
+    "discord.js": "14.26.2",
+    "dotenv": "16.6.1",
+    "fastify": "^5.8.4",
+    "jsonwebtoken": "9.0.2",
+    "pino": "10.3.1",
+    "prisma": "6.19.3",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "24.7.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

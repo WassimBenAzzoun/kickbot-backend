@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StreamPlatform {
+  KICK
+}
+
+enum NotificationStatus {
+  LIVE
+}
+
+enum BotActivityType {
+  PLAYING
+  WATCHING
+  LISTENING
+  COMPETING
+  CUSTOM
+}
+
+enum AppSettingKey {
+  GUILD_WHITELIST_ENFORCED
+}
+
+model GuildConfig {
+  id             String   @id @default(cuid())
+  guildId        String   @unique
+  alertChannelId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([guildId])
+}
+
+model TrackedStreamer {
+  id                 String         @id @default(cuid())
+  guildId            String
+  platform           StreamPlatform @default(KICK)
+  streamerUsername   String
+  isActive           Boolean        @default(true)
+  lastKnownLiveState Boolean        @default(false)
+  lastNotifiedLiveAt DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([guildId, platform, streamerUsername])
+  @@index([guildId, isActive])
+  @@index([platform, streamerUsername])
+}
+
+model NotificationHistory {
+  id               String             @id @default(cuid())
+  guildId          String
+  streamerUsername String
+  platform         StreamPlatform     @default(KICK)
+  status           NotificationStatus
+  messageId        String?
+  sentAt           DateTime           @default(now())
+
+  @@index([guildId, sentAt])
+  @@index([streamerUsername, sentAt])
+}
+
+model GlobalBotConfig {
+  id                      String          @id @default(cuid())
+  rotationEnabled         Boolean         @default(true)
+  rotationIntervalSeconds Int             @default(60)
+  defaultStatusEnabled    Boolean         @default(true)
+  defaultStatusText       String?
+  defaultActivityType     BotActivityType?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+}
+
+model BotStatusMessage {
+  id              String          @id @default(cuid())
+  text            String
+  activityType    BotActivityType
+  isEnabled       Boolean         @default(true)
+  sortOrder       Int             @default(0)
+  usePlaceholders Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([isEnabled, sortOrder])
+  @@index([sortOrder])
+}
+
+model GlobalAdmin {
+  id        String   @id @default(cuid())
+  discordId String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([discordId])
+}
+
+model BotGuildState {
+  id         String   @id @default(cuid())
+  guildId    String   @unique
+  guildName  String
+  iconHash   String?
+  isInGuild  Boolean  @default(true)
+  joinedAt   DateTime @default(now())
+  leftAt     DateTime?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isInGuild, guildName])
+  @@index([lastSeenAt])
+}
+
+model AppSetting {
+  id        String        @id @default(cuid())
+  key       AppSettingKey @unique
+  value     String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model WhitelistedGuild {
+  id            String   @id @default(cuid())
+  guildId       String   @unique
+  guildName     String?
+  addedByUserId String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([guildName])
+}

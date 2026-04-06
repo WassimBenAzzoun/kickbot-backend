@@ -61,15 +61,45 @@ fi
 
 TARGET_USER="${SUDO_USER:-$USER}"
 
+run_root() {
+  if [[ -n "${SUDO}" ]]; then
+    sudo "$@"
+  else
+    "$@"
+  fi
+}
+
+run_root_env() {
+  if [[ -n "${SUDO}" ]]; then
+    sudo env "$@"
+  else
+    env "$@"
+  fi
+}
+
+restart_ssh_service() {
+  if run_root systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+    run_root systemctl restart ssh
+    return 0
+  fi
+
+  if run_root systemctl list-unit-files sshd.service >/dev/null 2>&1; then
+    run_root systemctl restart sshd
+    return 0
+  fi
+
+  die "Unable to find an SSH service unit to restart."
+}
+
 install_base_packages() {
   log_info "Updating apt package metadata..."
-  ${SUDO} apt update
+  run_root apt update
 
   log_info "Applying package upgrades..."
-  ${SUDO} DEBIAN_FRONTEND=noninteractive apt upgrade -y
+  run_root_env DEBIAN_FRONTEND=noninteractive apt upgrade -y
 
   log_info "Installing required base packages..."
-  ${SUDO} DEBIAN_FRONTEND=noninteractive apt install -y \
+  run_root_env DEBIAN_FRONTEND=noninteractive apt install -y \
     curl \
     git \
     ufw \
@@ -81,14 +111,14 @@ install_base_packages() {
 
 configure_firewall() {
   log_info "Configuring UFW..."
-  ${SUDO} ufw allow OpenSSH >/dev/null
-  ${SUDO} ufw allow 80/tcp >/dev/null
-  ${SUDO} ufw allow 443/tcp >/dev/null
+  run_root ufw allow OpenSSH >/dev/null
+  run_root ufw allow 80/tcp >/dev/null
+  run_root ufw allow 443/tcp >/dev/null
 
-  if ${SUDO} ufw status | grep -q "Status: inactive"; then
-    ${SUDO} ufw --force enable >/dev/null
+  if run_root ufw status | grep -q "Status: inactive"; then
+    run_root ufw --force enable >/dev/null
   else
-    ${SUDO} ufw reload >/dev/null
+    run_root ufw reload >/dev/null
   fi
 
   log_success "Firewall rules applied for SSH, HTTP, and HTTPS."
@@ -96,28 +126,33 @@ configure_firewall() {
 
 install_docker() {
   log_info "Installing Docker Engine from the official Docker repository..."
-  ${SUDO} install -m 0755 -d /etc/apt/keyrings
+  local keyring_path="/etc/apt/keyrings/docker.gpg"
+  local temp_keyring
 
-  if [[ ! -f /etc/apt/keyrings/docker.gpg || "${FORCE}" == "true" ]]; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | ${SUDO} gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    ${SUDO} chmod a+r /etc/apt/keyrings/docker.gpg
+  run_root install -m 0755 -d /etc/apt/keyrings
+
+  if [[ ! -f "${keyring_path}" || "${FORCE}" == "true" ]]; then
+    temp_keyring="$(mktemp)"
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor > "${temp_keyring}"
+    run_root install -m 0644 "${temp_keyring}" "${keyring_path}"
+    rm -f "${temp_keyring}"
   fi
 
   echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    "deb [arch=$(dpkg --print-architecture) signed-by=${keyring_path}] https://download.docker.com/linux/ubuntu \
     $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" \
-    | ${SUDO} tee /etc/apt/sources.list.d/docker.list >/dev/null
+    | run_root tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-  ${SUDO} apt update
-  ${SUDO} DEBIAN_FRONTEND=noninteractive apt install -y \
+  run_root apt update
+  run_root_env DEBIAN_FRONTEND=noninteractive apt install -y \
     docker-ce \
     docker-ce-cli \
     containerd.io \
     docker-buildx-plugin \
     docker-compose-plugin
 
-  ${SUDO} systemctl enable --now docker
-  ${SUDO} usermod -aG docker "${TARGET_USER}"
+  run_root systemctl enable --now docker
+  run_root usermod -aG docker "${TARGET_USER}"
   log_success "Docker Engine and Compose plugin are installed."
 }
 
@@ -128,8 +163,8 @@ install_node() {
   fi
 
   log_info "Installing Node.js LTS from NodeSource..."
-  curl -fsSL https://deb.nodesource.com/setup_lts.x | ${SUDO} bash -
-  ${SUDO} DEBIAN_FRONTEND=noninteractive apt install -y nodejs
+  curl -fsSL https://deb.nodesource.com/setup_lts.x | run_root bash -
+  run_root_env DEBIAN_FRONTEND=noninteractive apt install -y nodejs
   log_success "Node.js LTS installed."
 }
 
@@ -145,29 +180,29 @@ configure_ssh() {
   check_command sshd
 
   backup_path="${sshd_config}.bak.$(date +%Y%m%d%H%M%S)"
-  ${SUDO} cp "${sshd_config}" "${backup_path}"
+  run_root cp "${sshd_config}" "${backup_path}"
 
   if grep -Eq '^[#[:space:]]*PasswordAuthentication' "${sshd_config}"; then
-    ${SUDO} sed -i 's/^[#[:space:]]*PasswordAuthentication.*/PasswordAuthentication no/' "${sshd_config}"
+    run_root sed -i 's/^[#[:space:]]*PasswordAuthentication.*/PasswordAuthentication no/' "${sshd_config}"
   else
-    echo "PasswordAuthentication no" | ${SUDO} tee -a "${sshd_config}" >/dev/null
+    echo "PasswordAuthentication no" | run_root tee -a "${sshd_config}" >/dev/null
   fi
 
   if grep -Eq '^[#[:space:]]*KbdInteractiveAuthentication' "${sshd_config}"; then
-    ${SUDO} sed -i 's/^[#[:space:]]*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' "${sshd_config}"
+    run_root sed -i 's/^[#[:space:]]*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' "${sshd_config}"
   else
-    echo "KbdInteractiveAuthentication no" | ${SUDO} tee -a "${sshd_config}" >/dev/null
+    echo "KbdInteractiveAuthentication no" | run_root tee -a "${sshd_config}" >/dev/null
   fi
 
-  ${SUDO} sshd -t
-  ${SUDO} systemctl restart ssh
+  run_root sshd -t
+  restart_ssh_service
   log_success "SSH password authentication disabled. Verify key-based login before closing your session."
 }
 
 prepare_directories() {
   log_info "Creating deployment directories..."
-  ${SUDO} install -d -m 0750 -o "${TARGET_USER}" -g "${TARGET_USER}" "${PROJECT_DIR}"
-  ${SUDO} install -d -m 0750 -o "${TARGET_USER}" -g "${TARGET_USER}" "/backups/${APP_NAME}"
+  run_root install -d -m 0750 -o "${TARGET_USER}" -g "${TARGET_USER}" "${PROJECT_DIR}"
+  run_root install -d -m 0750 -o "${TARGET_USER}" -g "${TARGET_USER}" "/backups/${APP_NAME}"
   log_success "Created ${PROJECT_DIR} and /backups/${APP_NAME}."
 }
 
@@ -176,15 +211,15 @@ print_summary() {
   printf "\n"
   log_info "Project directory: ${PROJECT_DIR}"
   log_info "Backups directory: /backups/${APP_NAME}"
-  log_info "Docker version: $(docker --version)"
-  log_info "Docker Compose version: $(docker compose version)"
+  log_info "Docker version: $(run_root docker --version)"
+  log_info "Docker Compose version: $(run_root docker compose version)"
 
   if command -v node >/dev/null 2>&1; then
     log_info "Node.js version: $(node --version)"
   fi
 
   log_info "Git version: $(git --version)"
-  log_info "UFW status: $(${SUDO} ufw status | head -n 1)"
+  log_info "UFW status: $(run_root ufw status | head -n 1)"
   log_warning "If you were just added to the docker group, log out and back in or run: newgrp docker"
   log_warning "Make sure SSH keys are configured before disabling password authentication on any future run."
 }

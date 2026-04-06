@@ -85,7 +85,7 @@ secure_script_permissions() {
   local target_dir="$1"
 
   if [[ -d "${target_dir}" ]]; then
-    find "${target_dir}" -maxdepth 1 -type f -name "*.sh" -exec chmod 750 {} \;
+    find "${target_dir}" -type f -name "*.sh" -exec chmod 750 {} \;
   fi
 }
 

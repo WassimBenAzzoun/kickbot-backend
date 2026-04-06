@@ -96,7 +96,13 @@ sync_repo_if_available() {
 
   ensure_clean_git_tree "${WORKDIR}"
   git -C "${WORKDIR}" fetch origin "${DEPLOY_BRANCH}" --prune
-  git -C "${WORKDIR}" checkout "${DEPLOY_BRANCH}"
+
+  if git -C "${WORKDIR}" show-ref --verify --quiet "refs/heads/${DEPLOY_BRANCH}"; then
+    git -C "${WORKDIR}" checkout "${DEPLOY_BRANCH}"
+  else
+    git -C "${WORKDIR}" checkout -B "${DEPLOY_BRANCH}" "origin/${DEPLOY_BRANCH}"
+  fi
+
   git -C "${WORKDIR}" pull --ff-only origin "${DEPLOY_BRANCH}"
 }
 

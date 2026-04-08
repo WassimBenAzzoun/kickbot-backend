@@ -37,6 +37,7 @@ This backend exposes the API and auth flow that frontend consumes.
 ## Environment Setup
 
 Copy `.env.example` to `.env` and fill in the required values.
+Copy `.env.example` to `.env` and fill in the required values.
 
 ### Core
 

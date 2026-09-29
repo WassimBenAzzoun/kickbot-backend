@@ -1,0 +1,19 @@
+build:
+  docker:
+    release:
+      dockerfile: Dockerfile
+      target: migrate
+    web:
+      dockerfile: Dockerfile
+      target: runtime
+
+release:
+  command:
+    - npm run prisma:migrate:deploy
+  image: release
+
+run:
+  web:
+    command:
+      - node --enable-source-maps dist/main.js
+    image: web

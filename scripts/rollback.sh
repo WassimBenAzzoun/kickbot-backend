@@ -19,7 +19,7 @@ Options:
   --app-dir=/path              Deployment directory. Defaults to the current repo root.
   --commit=<sha>               Roll back to a specific git commit.
   --skip-build                 Skip image rebuild and reuse existing images.
-  --only=api,bot               Restart only the listed services.
+  --only=backend               Restart only the listed services.
   --no-migrate                 Skip Prisma migrations during rollback.
   --force                      Allow rollback from a detached HEAD or when previous_release is missing.
   -h, --help                   Show this help message.
@@ -93,12 +93,12 @@ main() {
     DISCORD_TOKEN \
     DISCORD_CLIENT_ID \
     DISCORD_CLIENT_SECRET \
+    DISCORD_REDIRECT_URI \
     KICK_CLIENT_ID \
     KICK_CLIENT_SECRET \
-    API_BASE_URL \
     FRONTEND_URL \
-    CORS_ORIGIN \
-    JWT_SECRET
+    CORS_ORIGINS \
+    SESSION_ENCRYPTION_KEY
 
   if ! git -C "${WORKDIR}" diff --quiet || ! git -C "${WORKDIR}" diff --cached --quiet; then
     die "Rollback cannot proceed with local git changes present."
@@ -109,7 +109,7 @@ main() {
 
   local target_commit
   local targets=()
-  local check_api_health=false
+  local check_backend_health=false
   local service_name
 
   target_commit="$(resolve_rollback_target)"
@@ -120,13 +120,13 @@ main() {
 
   resolve_target_services "${ONLY_SERVICES}" true targets
 
-  if compose_service_exists "api"; then
+  if compose_service_exists "backend"; then
     if [[ -z "${ONLY_SERVICES}" ]]; then
-      check_api_health=true
+      check_backend_health=true
     else
       for service_name in "${targets[@]}"; do
-        if [[ "${service_name}" == "api" ]]; then
-          check_api_health=true
+        if [[ "${service_name}" == "backend" ]]; then
+          check_backend_health=true
           break
         fi
       done
@@ -157,8 +157,8 @@ main() {
 
   compose up -d "${targets[@]}"
 
-  if [[ "${check_api_health}" == "true" ]]; then
-    health_check_api
+  if [[ "${check_backend_health}" == "true" ]]; then
+    health_check_backend
   fi
 
   record_successful_release "${WORKDIR}"

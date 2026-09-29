@@ -205,16 +205,12 @@ resolve_target_services() {
   if [[ -n "${requested_csv}" ]]; then
     IFS=',' read -r -a requested_list <<< "${requested_csv}"
   else
-    requested_list=(api frontend bot)
-
-    if [[ "${include_infra}" == "true" ]]; then
-      requested_list+=(caddy)
-    fi
+    requested_list=(backend)
   fi
 
   for service_name in "${requested_list[@]}"; do
     case "${service_name}" in
-      api|frontend|bot|postgres|caddy)
+      backend|postgres)
         ;;
       *)
         die "Unsupported service passed to --only: ${service_name}"
@@ -258,40 +254,24 @@ run_migrations() {
     return 0
   fi
 
-  if compose_service_exists "api"; then
-    log_info "Running Prisma migrations via the 'api' service..."
-    compose run --rm --no-deps api npm run prisma:migrate:deploy
+  if compose_service_exists "backend"; then
+    log_info "Running Prisma migrations via the 'backend' service..."
+    compose run --rm --no-deps backend npm run prisma:migrate:deploy
     return 0
   fi
 
-  die "Unable to run migrations because neither 'migrate' nor 'api' exists in compose."
+  die "Unable to run migrations because neither 'migrate' nor 'backend' exists in compose."
 }
 
-register_discord_commands() {
-  if compose_service_exists "api"; then
-    log_info "Registering Discord application commands..."
-    compose run --rm --no-deps api npm run register:commands
-    return 0
-  fi
-
-  if compose_service_exists "bot"; then
-    log_info "Registering Discord application commands via the bot image..."
-    compose run --rm --no-deps bot npm run register:commands
-    return 0
-  fi
-
-  die "Unable to register commands because neither 'api' nor 'bot' exists in compose."
-}
-
-health_check_api() {
-  local api_port
+health_check_backend() {
+  local backend_port
   local health_url
 
-  api_port="$(get_env_value "${ENV_FILE}" "API_PORT" || true)"
-  api_port="${api_port:-4000}"
-  health_url="${API_HEALTH_URL:-http://127.0.0.1:${api_port}/health}"
+  backend_port="$(get_env_value "${ENV_FILE}" "PORT" || true)"
+  backend_port="${backend_port:-4000}"
+  health_url="${BACKEND_HEALTH_URL:-http://127.0.0.1:${backend_port}/api/v1/health/ready}"
 
-  wait_for_service "API health check" "${health_url}" 40 3
+  wait_for_service "Backend readiness check" "${health_url}" 40 3
 }
 
 ensure_clean_git_tree() {

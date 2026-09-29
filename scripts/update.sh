@@ -7,7 +7,6 @@ source "${SCRIPT_DIR}/lib/common.sh"
 FORCE=false
 SKIP_BUILD=false
 NO_MIGRATE=false
-REGISTER_COMMANDS=false
 ONLY_SERVICES=""
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 WORKDIR="${APP_DIR}"
@@ -21,9 +20,8 @@ Options:
   --branch=branch              Git branch to update from. Defaults to main.
   --force                      Use git pull --rebase --autostash if the worktree is dirty.
   --skip-build                 Skip rebuilding Docker images.
-  --only=api,bot               Restart only the listed services.
+  --only=backend               Restart only the listed services.
   --no-migrate                 Skip Prisma migrations.
-  --register-commands          Re-register Discord slash commands after update.
   -h, --help                   Show this help message.
 EOF
 }
@@ -47,9 +45,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-migrate)
       NO_MIGRATE=true
-      ;;
-    --register-commands)
-      REGISTER_COMMANDS=true
       ;;
     -h|--help)
       usage
@@ -104,28 +99,28 @@ main() {
     DISCORD_TOKEN \
     DISCORD_CLIENT_ID \
     DISCORD_CLIENT_SECRET \
+    DISCORD_REDIRECT_URI \
     KICK_CLIENT_ID \
     KICK_CLIENT_SECRET \
-    API_BASE_URL \
     FRONTEND_URL \
-    CORS_ORIGIN \
-    JWT_SECRET
+    CORS_ORIGINS \
+    SESSION_ENCRYPTION_KEY
 
   setup_runtime_permissions
   compose config >/dev/null
 
   local targets=()
-  local check_api_health=false
+  local check_backend_health=false
   local service_name
   resolve_target_services "${ONLY_SERVICES}" true targets
 
-  if compose_service_exists "api"; then
+  if compose_service_exists "backend"; then
     if [[ -z "${ONLY_SERVICES}" ]]; then
-      check_api_health=true
+      check_backend_health=true
     else
       for service_name in "${targets[@]}"; do
-        if [[ "${service_name}" == "api" ]]; then
-          check_api_health=true
+        if [[ "${service_name}" == "backend" ]]; then
+          check_backend_health=true
           break
         fi
       done
@@ -157,12 +152,8 @@ main() {
   log_info "Applying updated containers with minimal downtime..."
   compose up -d "${targets[@]}"
 
-  if [[ "${REGISTER_COMMANDS}" == "true" ]]; then
-    register_discord_commands
-  fi
-
-  if [[ "${check_api_health}" == "true" ]]; then
-    health_check_api
+  if [[ "${check_backend_health}" == "true" ]]; then
+    health_check_backend
   fi
 
   record_successful_release "${WORKDIR}"

@@ -10,9 +10,9 @@ WORKDIR="${APP_DIR}"
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/logs.sh api
-  ./scripts/logs.sh frontend
-  ./scripts/logs.sh bot
+  ./scripts/logs.sh backend
+  ./scripts/logs.sh postgres
+  ./scripts/logs.sh migrate
   ./scripts/logs.sh all
 EOF
 }
@@ -36,7 +36,7 @@ main() {
       log_info "Streaming logs for all compose services..."
       compose logs -f --tail=200
       ;;
-    api|frontend|bot|postgres|caddy|migrate)
+    backend|postgres|migrate)
       if ! compose_service_exists "${TARGET}"; then
         die "Service '${TARGET}' is not defined in ${COMPOSE_FILE}."
       fi
@@ -45,7 +45,7 @@ main() {
       compose logs -f --tail=200 "${TARGET}"
       ;;
     *)
-      die "Unsupported log target '${TARGET}'. Use api, frontend, bot, postgres, caddy, migrate, or all."
+      die "Unsupported log target '${TARGET}'. Use backend, postgres, migrate, or all."
       ;;
   esac
 }

@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum StreamPlatform {
@@ -23,114 +24,105 @@ enum BotActivityType {
   CUSTOM
 }
 
-enum AppSettingKey {
-  GUILD_WHITELIST_ENFORCED
+enum GuildMembershipState {
+  UNKNOWN
+  CONNECTED
+  LEFT
 }
 
-model GuildConfig {
-  id             String   @id @default(cuid())
-  guildId        String   @unique
-  alertChannelId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+model DiscordGuild {
+  id                     String               @id
+  name                   String?
+  iconHash               String?
+  membershipState        GuildMembershipState @default(UNKNOWN)
+  alertChannelId         String?
+  isAllowed              Boolean              @default(false)
+  allowlistNotes         String?
+  allowedByDiscordUserId String?
+  allowedAt              DateTime?
+  joinedAt               DateTime?
+  leftAt                 DateTime?
+  lastSeenAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  streamers              TrackedStreamer[]
+  notifications          Notification[]
 
-  @@index([guildId])
+  @@index([membershipState, name])
+  @@index([isAllowed, name])
 }
 
 model TrackedStreamer {
-  id                 String         @id @default(cuid())
+  id                   String         @id @default(uuid())
+  guildId              String
+  platform             StreamPlatform @default(KICK)
+  username             String
+  normalizedUsername   String
+  enabled              Boolean        @default(true)
+  lastKnownLiveState   Boolean        @default(false)
+  currentLiveStartedAt DateTime?
+  lastNotifiedLiveAt   DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  guild                DiscordGuild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  notifications        Notification[]
+
+  @@unique([guildId, platform, normalizedUsername])
+  @@index([guildId, enabled])
+  @@index([platform, normalizedUsername])
+}
+
+model Notification {
+  id                 String             @id @default(uuid())
   guildId            String
-  platform           StreamPlatform @default(KICK)
+  streamerId         String?
   streamerUsername   String
-  isActive           Boolean        @default(true)
-  lastKnownLiveState Boolean        @default(false)
-  lastNotifiedLiveAt DateTime?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  normalizedUsername String
+  platform           StreamPlatform
+  status             NotificationStatus
+  streamUrl          String
+  title              String?
+  category           String?
+  thumbnailUrl       String?
+  viewerCount        Int?
+  streamStartedAt    DateTime
+  discordMessageId   String?
+  sentAt             DateTime?
+  guild              DiscordGuild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  streamer           TrackedStreamer?   @relation(fields: [streamerId], references: [id], onDelete: SetNull)
 
-  @@unique([guildId, platform, streamerUsername])
-  @@index([guildId, isActive])
-  @@index([platform, streamerUsername])
+  @@unique([guildId, platform, normalizedUsername, streamStartedAt])
+  @@index([guildId, sentAt, id])
+  @@index([streamerId, sentAt])
 }
 
-model NotificationHistory {
-  id               String             @id @default(cuid())
-  guildId          String
-  streamerUsername String
-  platform         StreamPlatform     @default(KICK)
-  status           NotificationStatus
-  messageId        String?
-  sentAt           DateTime           @default(now())
-
-  @@index([guildId, sentAt])
-  @@index([streamerUsername, sentAt])
-}
-
-model GlobalBotConfig {
-  id                      String          @id @default(cuid())
-  rotationEnabled         Boolean         @default(true)
-  rotationIntervalSeconds Int             @default(60)
-  defaultStatusEnabled    Boolean         @default(true)
+model BotSettings {
+  id                      String           @id @default("default")
+  allowlistEnforced       Boolean          @default(false)
+  rotationEnabled         Boolean          @default(true)
+  rotationIntervalSeconds Int              @default(60)
+  defaultStatusEnabled    Boolean          @default(true)
   defaultStatusText       String?
   defaultActivityType     BotActivityType?
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 }
 
-model BotStatusMessage {
-  id              String          @id @default(cuid())
+model PresenceMessage {
+  id              String          @id @default(uuid())
   text            String
   activityType    BotActivityType
-  isEnabled       Boolean         @default(true)
+  enabled         Boolean         @default(true)
   sortOrder       Int             @default(0)
   usePlaceholders Boolean         @default(true)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@index([isEnabled, sortOrder])
+  @@index([enabled, sortOrder])
   @@index([sortOrder])
 }
 
 model GlobalAdmin {
-  id        String   @id @default(cuid())
-  discordId String   @unique
+  discordId String   @id
   createdAt DateTime @default(now())
-
-  @@index([discordId])
-}
-
-model BotGuildState {
-  id         String   @id @default(cuid())
-  guildId    String   @unique
-  guildName  String
-  iconHash   String?
-  isInGuild  Boolean  @default(true)
-  joinedAt   DateTime @default(now())
-  leftAt     DateTime?
-  lastSeenAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([isInGuild, guildName])
-  @@index([lastSeenAt])
-}
-
-model AppSetting {
-  id        String        @id @default(cuid())
-  key       AppSettingKey @unique
-  value     String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-}
-
-model WhitelistedGuild {
-  id            String   @id @default(cuid())
-  guildId       String   @unique
-  guildName     String?
-  addedByUserId String?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([guildName])
 }

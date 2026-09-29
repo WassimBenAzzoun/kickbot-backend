@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,8 +7,6 @@ services:
       POSTGRES_USER: kickbot
       POSTGRES_PASSWORD: kickbot
       POSTGRES_DB: kickbot
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: migrate
     container_name: kickbot-migrate
     restart: "no"
     env_file:
@@ -34,11 +31,11 @@ services:
         condition: service_healthy
     command: ["npm", "run", "prisma:migrate:deploy"]
 
-  api:
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kickbot-api
+    container_name: kickbot-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -49,26 +46,19 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    command: ["npm", "run", "start:api"]
     ports:
       - "4000:4000"
-
-  bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: kickbot-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://kickbot:kickbot@postgres:5432/kickbot?schema=public
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    command: ["npm", "run", "start:bot"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/v1/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

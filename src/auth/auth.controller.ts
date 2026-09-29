@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpStatus, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiCookieAuth, ApiFoundResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -39,7 +39,7 @@ export class AuthController {
   public async login(@Res() response: FastifyReply): Promise<void> {
     const { state, token } = await this.sessions.createOAuthState();
     this.sessions.setOAuthStateCookie(response, token);
-    await response.redirect(this.discord.authorizationUrl(state));
+    await response.redirect(this.discord.authorizationUrl(state), HttpStatus.FOUND);
   }
 
   @Get("discord/callback")
@@ -74,7 +74,10 @@ export class AuthController {
         accessToken
       })
     );
-    await response.redirect(`${this.config.get("FRONTEND_URL", { infer: true })}/auth/callback`);
+    await response.redirect(
+      `${this.config.get("FRONTEND_URL", { infer: true })}/auth/callback`,
+      HttpStatus.FOUND
+    );
   }
 
   @Post("logout")

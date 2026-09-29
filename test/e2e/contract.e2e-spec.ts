@@ -92,6 +92,9 @@ describe("Dashboard API contract", () => {
       .useValue(prisma)
       .overrideProvider(DiscordApiService)
       .useValue({
+        authorizationUrl: vi.fn(
+          (state: string) => `https://discord.com/oauth2/authorize?state=${state}`
+        ),
         userGuilds: vi.fn(async () => [
           { id: guild.id, name: guild.name, icon: null, permissions: "32" }
         ]),
@@ -113,6 +116,17 @@ describe("Dashboard API contract", () => {
   });
 
   afterAll(async () => app.close());
+
+  it("returns a real HTTP redirect when Discord OAuth starts", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/discord/login"
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toMatch(/^https:\/\/discord\.com\/oauth2\/authorize\?state=/);
+    expect(response.headers["set-cookie"]).toContain("kickbot_oauth_state=");
+  });
 
   it("returns the enriched authenticated user and manageable guild", async () => {
     const me = await app.inject({

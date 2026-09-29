@@ -9,7 +9,7 @@ COPY prisma/migrations/20260925000000_unified_nest_backend ./prisma/migrations/2
 
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV DATABASE_URL=$DATABASE_URL
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN npm ci
 
 FROM dependencies AS build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
@@ -24,7 +24,7 @@ CMD ["npm", "run", "prisma:migrate:deploy"]
 FROM node:24-alpine AS production-dependencies
 WORKDIR /app
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:24-alpine AS runtime
 WORKDIR /app

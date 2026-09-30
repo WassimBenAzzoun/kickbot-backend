@@ -4,8 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma.config.ts ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
-COPY prisma/migrations/migration_lock.toml ./prisma/migrations/migration_lock.toml
-COPY prisma/migrations/20260925000000_unified_nest_backend ./prisma/migrations/20260925000000_unified_nest_backend
+COPY prisma/migrations ./prisma/migrations
 
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV DATABASE_URL=$DATABASE_URL

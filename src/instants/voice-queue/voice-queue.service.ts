@@ -312,6 +312,12 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
             this.logger.error(`FFmpeg failed in guild ${session.guildId}: ${error.message}`);
             session.player.stop(true);
           });
+          transcoder.stdin.on("error", (error) => {
+            this.logger.warn(
+              `FFmpeg input closed early in guild ${session.guildId}: ${error.message}`
+            );
+            session.player.stop(true);
+          });
           transcoder.stdin.end(audio);
           const resource = createAudioResource(transcoder.stdout, {
             inputType: StreamType.OggOpus,
@@ -409,35 +415,54 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
     const duration = await new Promise<number>((resolve, reject) => {
       const process = spawn(
         "ffprobe",
-        ["-v", "error", "-show_entries", "format=duration", "-of", "json", "pipe:0"],
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "a:0",
+          "-show_entries",
+          "packet=duration_time",
+          "-of",
+          "csv=p=0",
+          "pipe:0"
+        ],
         { stdio: ["pipe", "pipe", "ignore"] }
       );
       let output = "";
+      let settled = false;
+      const fail = (error: ApiError): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      };
       const timer = setTimeout(() => {
         process.kill();
-        reject(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe timed out"));
+        fail(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe timed out"));
       }, 8_000);
       process.stdout.on("data", (chunk: Buffer) => {
         output += chunk.toString("utf8");
       });
       process.once("error", () => {
-        clearTimeout(timer);
-        reject(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe is unavailable"));
+        fail(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe is unavailable"));
+      });
+      process.stdin.on("error", () => {
+        fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
       });
       process.once("close", (code) => {
-        clearTimeout(timer);
+        if (settled) return;
         if (code !== 0) {
-          reject(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
+          fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
           return;
         }
-        try {
-          const parsed = JSON.parse(output) as { format?: { duration?: string } };
-          const value = Number(parsed.format?.duration);
-          if (!Number.isFinite(value)) throw new Error("Missing duration");
-          resolve(value);
-        } catch {
-          reject(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
+        const value = totalPacketDuration(output);
+        if (value === null) {
+          fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
+          return;
         }
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
       });
       process.stdin.end(buffer);
     });
@@ -506,4 +531,16 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
       release();
     }
   }
+}
+
+export function totalPacketDuration(output: string): number | null {
+  let duration = 0;
+  let packetCount = 0;
+  for (const line of output.split(/\r?\n/u)) {
+    const value = Number(line.trim());
+    if (!Number.isFinite(value) || value <= 0) continue;
+    duration += value;
+    packetCount += 1;
+  }
+  return packetCount > 0 && Number.isFinite(duration) ? duration : null;
 }

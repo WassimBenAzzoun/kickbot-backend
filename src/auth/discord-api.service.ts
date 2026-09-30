@@ -75,6 +75,10 @@ export class DiscordApiService {
     return this.userGet("/users/@me", accessToken, userSchema);
   }
 
+  public async botUser(discordId: string): Promise<z.infer<typeof userSchema>> {
+    return this.botGet(`/users/${discordId}`, userSchema);
+  }
+
   public async userGuilds(accessToken: string): Promise<DiscordGuildSummary[]> {
     return this.userGet("/users/@me/guilds", accessToken, z.array(guildSchema));
   }

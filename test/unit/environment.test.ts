@@ -29,4 +29,14 @@ describe("environmentSchema", () => {
     const parsed = environmentSchema.safeParse({ ...validEnvironment, COOKIE_SECURE: "yes" });
     expect(parsed.success).toBe(false);
   });
+
+  it("treats blank optional values as unset", () => {
+    const parsed = environmentSchema.parse({
+      ...validEnvironment,
+      DISCORD_DEVELOPMENT_GUILD_ID: "",
+      COOKIE_DOMAIN: ""
+    });
+    expect(parsed.DISCORD_DEVELOPMENT_GUILD_ID).toBeUndefined();
+    expect(parsed.COOKIE_DOMAIN).toBeUndefined();
+  });
 });

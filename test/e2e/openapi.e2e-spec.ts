@@ -44,7 +44,14 @@ describe("OpenAPI documentation", () => {
 
     expect(document.info).toMatchObject({ title: "KickBot Backend API", version: "2.0.0" });
     expect(document.tags.map((tag: { name: string }) => tag.name)).toEqual(
-      expect.arrayContaining(["Authentication", "Bot", "Guilds", "Administration", "Health"])
+      expect.arrayContaining([
+        "Authentication",
+        "Bot",
+        "Guilds",
+        "Instants",
+        "Administration",
+        "Health"
+      ])
     );
     expect(document.components.securitySchemes.sessionCookie).toMatchObject({
       type: "apiKey",
@@ -78,5 +85,14 @@ describe("OpenAPI documentation", () => {
         "application/json"
       ].schema.properties.error
     ).toBeDefined();
+    expect(document.paths["/api/v1/guilds/{guildId}/instants/queue"].post).toMatchObject({
+      summary: "Queue a Myinstants sound in a Discord voice channel",
+      security: [{ sessionCookie: [] }]
+    });
+    expect(
+      document.paths["/api/v1/admin/instants/settings"].patch.requestBody.content[
+        "application/json"
+      ].schema.properties.accessMode.enum
+    ).toEqual(["EVERYONE", "ALLOWLIST_ONLY"]);
   });
 });

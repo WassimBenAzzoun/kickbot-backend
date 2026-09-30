@@ -38,7 +38,7 @@ All application routes use the `/api/v1` prefix:
 
 - `/auth/discord/login`, `/auth/discord/callback`, `/auth/logout`, `/auth/me`
 - `/bot/invite-url`
-- `/guilds` and nested channels, streamers, and notifications routes
+- `/guilds` and nested channels, streamers, notifications, and Instants voice routes
 - `/admin/settings`, `/admin/presence-messages`, `/admin/admins`, `/admin/guilds`
 - `/health/live` and `/health/ready`
 
@@ -48,7 +48,7 @@ See the [HTTP API reference](docs/API.md) for authentication, response conventio
 
 ## Discord commands
 
-Necord discovers and registers `/ping`, `/help`, `/config channel|view`, and `/streamer add|remove|enable|disable|list`. Configuration commands require the Discord `Manage Server` permission.
+Necord discovers and registers `/ping`, `/help`, `/config channel|view`, `/streamer add|remove|enable|disable|list`, and `/instant play|search|queue|stop`. Configuration commands require Discord `Manage Server`; instant stop also accepts global admins. Instant playback is globally disabled by default.
 
 ## Verification
 
@@ -66,7 +66,7 @@ npm audit --omit=dev
 
 `docker compose up --build` runs three services: PostgreSQL, a one-shot Prisma migration, and the unified backend. Only port `4000` is published.
 
-The migration history is a clean v2 baseline. It is intentionally incompatible with the former development schema and data.
+The runtime image includes FFmpeg and ffprobe for bounded, in-memory instant playback. The Instants schema is supplied as an additive migration so existing production data is preserved.
 
 ## Heroku with Supabase Postgres
 

@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-const optionalString = () => z.string().trim().min(1).optional();
+const optionalString = () =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().min(1).optional()
+  );
 const booleanFromEnvironment = (defaultValue: boolean) =>
   z
     .string()
@@ -26,7 +30,7 @@ export const environmentSchema = z
     DISCORD_CLIENT_SECRET: z.string().trim().min(1),
     DISCORD_REDIRECT_URI: z.url(),
     DISCORD_DEVELOPMENT_GUILD_ID: optionalString(),
-    DISCORD_BOT_PERMISSIONS: z.string().regex(/^\d+$/).default("84992"),
+    DISCORD_BOT_PERMISSIONS: z.string().regex(/^\d+$/).default("3230720"),
     DISCORD_OAUTH_SCOPES: z.string().default("identify guilds"),
 
     KICK_CLIENT_ID: z.string().trim().min(1),
@@ -40,6 +44,21 @@ export const environmentSchema = z
     POLL_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
     PROVIDER_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(4),
     BOT_PRESENCE_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(10).default(60),
+
+    MYINSTANTS_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(8_000),
+    MYINSTANTS_CACHE_TTL_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
+    MYINSTANTS_USER_AGENT: z.string().trim().min(1).default("KickBot/2.0"),
+    INSTANT_AUDIO_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(100_000)
+      .max(20_000_000)
+      .default(5_242_880),
+    INSTANT_MAX_DURATION_SECONDS: z.coerce.number().int().min(1).max(120).default(30),
+    INSTANT_MAX_QUEUE_LENGTH: z.coerce.number().int().min(1).max(100).default(20),
+    INSTANT_USER_COOLDOWN_SECONDS: z.coerce.number().int().min(0).max(60).default(3),
+    INSTANT_MAX_ACTIVE_GUILDS: z.coerce.number().int().min(1).max(20).default(5),
+    INSTANT_IDLE_DISCONNECT_SECONDS: z.coerce.number().int().min(1).max(300).default(30),
 
     FRONTEND_URL: z.url().default("http://localhost:3000"),
     CORS_ORIGINS: z.string().default("http://localhost:3000"),

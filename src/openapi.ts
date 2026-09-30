@@ -20,7 +20,9 @@ export function configureOpenApi(
     .addTag("Authentication", "Discord OAuth and encrypted session management")
     .addTag("Bot", "Discord bot installation")
     .addTag("Guilds", "Guild configuration, tracked streamers, and notification history")
+    .addTag("Instants", "Myinstants search and Discord voice playback")
     .addTag("Administration", "Global bot configuration and guild administration")
+    .addTag("Administration - Instants", "Global instant playback access and settings")
     .addTag("Health", "Process and dependency health checks")
     .addCookieAuth(
       options.sessionCookieName,

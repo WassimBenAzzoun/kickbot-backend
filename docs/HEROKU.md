@@ -53,6 +53,7 @@ heroku config:set \
   DISCORD_TOKEN="YOUR_DISCORD_BOT_TOKEN" \
   DISCORD_CLIENT_ID="YOUR_DISCORD_CLIENT_ID" \
   DISCORD_CLIENT_SECRET="YOUR_DISCORD_CLIENT_SECRET" \
+  DISCORD_BOT_PERMISSIONS=3230720 \
   DISCORD_REDIRECT_URI="https://YOUR_APP_NAME.herokuapp.com/api/v1/auth/discord/callback" \
   KICK_CLIENT_ID="YOUR_KICK_CLIENT_ID" \
   KICK_CLIENT_SECRET="YOUR_KICK_CLIENT_SECRET" \
@@ -66,6 +67,8 @@ heroku config:set \
 ```
 
 Leave `COOKIE_DOMAIN` unset unless the frontend and API intentionally share a parent domain. Set any optional polling, presence, OAuth-scope, rate-limit, and cookie-name variables from `.env.example` when their defaults are not suitable.
+
+The container runtime installs FFmpeg and ffprobe. Instants remain disabled after the additive database migration. After deploying, update the bot permission integer to `3230720`, regenerate or reopen the bot invite, and reauthorize it in existing guilds so it receives **Connect** and **Speak**. Verify Myinstants access from the dyno before enabling the feature in the global admin dashboard. If Myinstants challenges the Heroku egress address, keep the feature disabled and use only an authorized allowlisted endpoint or proxy.
 
 Update the Discord application's OAuth redirect allowlist with the exact `DISCORD_REDIRECT_URI` value.
 
@@ -103,4 +106,4 @@ curl https://YOUR_APP_NAME.herokuapp.com/api/v1/health/ready
 curl https://YOUR_APP_NAME.herokuapp.com/api/docs-json
 ```
 
-Readiness is healthy only when PostgreSQL, Discord, and the scheduler are ready. The Swagger UI is disabled by the production example, while the OpenAPI JSON contract remains available.
+Readiness is healthy only when PostgreSQL, Discord, and the scheduler are ready. It reports `instants: disabled` while the feature is off; enabled mode additionally requires Discord voice and ffprobe. The Swagger UI is disabled by the production example, while the OpenAPI JSON contract remains available.

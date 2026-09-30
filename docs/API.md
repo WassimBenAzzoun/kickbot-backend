@@ -59,6 +59,12 @@ Dates are ISO-8601 strings. Successful delete and reorder operations return `204
 | PATCH | `/api/v1/guilds/:guildId/streamers/:streamerId` | Session + Manage Guild | Enable or disable tracking |
 | DELETE | `/api/v1/guilds/:guildId/streamers/:streamerId` | Session + Manage Guild | Remove tracking |
 | GET | `/api/v1/guilds/:guildId/notifications` | Session + Manage Guild | List delivered notification history |
+| GET | `/api/v1/guilds/:guildId/instants/capabilities` | Session + Manage Guild | Read access, voice readiness, and limits |
+| GET | `/api/v1/guilds/:guildId/instants/voice-channels` | Session + Manage Guild | List normal channels where the bot can connect and speak |
+| GET | `/api/v1/guilds/:guildId/instants/search` | Session + playback access | Search Myinstants by text |
+| POST | `/api/v1/guilds/:guildId/instants/queue` | Session + playback access | Resolve a Myinstants page and queue it in voice |
+| GET | `/api/v1/guilds/:guildId/instants/queue` | Session + Manage Guild | Read the process-local playback queue |
+| DELETE | `/api/v1/guilds/:guildId/instants/queue` | Session + Manage Guild | Stop playback, clear the queue, and leave voice |
 | GET/PATCH | `/api/v1/admin/settings` | Global admin | Read or update bot settings |
 | GET/POST | `/api/v1/admin/presence-messages` | Global admin | List or create presence messages |
 | PATCH/DELETE | `/api/v1/admin/presence-messages/:id` | Global admin | Update or delete a presence message |
@@ -69,6 +75,9 @@ Dates are ISO-8601 strings. Successful delete and reorder operations return `204
 | POST | `/api/v1/admin/guilds/sync` | Global admin | Reconcile guilds with Discord |
 | POST | `/api/v1/admin/guilds/:guildId/leave` | Global admin | Make the bot leave a guild |
 | PATCH | `/api/v1/admin/guilds/:guildId/access` | Global admin | Change allowlist access |
+| GET/PATCH | `/api/v1/admin/instants/settings` | Global admin | Read or update the Instants kill switch and access mode |
+| GET/POST | `/api/v1/admin/instants/allowed-users` | Global admin | List or add globally allowed Discord users |
+| DELETE | `/api/v1/admin/instants/allowed-users/:discordId` | Global admin | Remove an allowed Discord user |
 | GET | `/api/v1/health/live` | No | Process liveness |
 | GET | `/api/v1/health/ready` | No | PostgreSQL, Discord, and scheduler readiness |
 
@@ -77,6 +86,8 @@ Dates are ISO-8601 strings. Successful delete and reorder operations return `204
 Notification history supports `cursor` and `limit` query parameters. `limit` defaults to `20` and accepts values from `1` through `100`. Pass `page.nextCursor` to the next request until `page.hasMore` is false.
 
 Manageable guilds include `membershipState` and `trackedStreamerCount`. A dashboard should consider the bot connected only when `membershipState` is `CONNECTED`. Presence messages accept `usePlaceholders`; `{guilds}` and `{streamers}` are expanded only when that flag is enabled.
+
+Instant search accepts `query` (2–80 characters) and `limit` (1–25). Queue creation accepts `{ "voiceChannelId": "...", "instantUrl": "https://www.myinstants.com/en/instant/.../" }`; arbitrary audio URLs are never accepted or returned. Queues are FIFO and process-local, so they are cleared on restart. `EVERYONE` and `ALLOWLIST_ONLY` are bot-wide modes, global admins bypass the user allowlist, and guild managers retain stop/clear moderation access.
 
 ## Development examples
 

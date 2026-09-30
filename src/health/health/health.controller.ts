@@ -12,6 +12,8 @@ import type { Environment } from "../../config/environment.js";
 import { PrismaService } from "../../database/prisma.service.js";
 import { DiscordService } from "../../discord/discord/discord.service.js";
 import { SchedulingService } from "../../scheduling/scheduling/scheduling.service.js";
+import { InstantAccessService } from "../../instants/instant-access/instant-access.service.js";
+import { VoiceQueueService } from "../../instants/voice-queue/voice-queue.service.js";
 
 @Controller("health")
 @ApiTags("Health")
@@ -43,14 +45,20 @@ export class HealthController {
       const scheduler = discordEnabled
         ? this.moduleRef.get(SchedulingService, { strict: false })
         : undefined;
+      const instantAccess = this.moduleRef.get(InstantAccessService, { strict: false });
+      const voiceQueue = this.moduleRef.get(VoiceQueueService, { strict: false });
+      const instantSettings = await instantAccess.settings();
       if (discordEnabled && (!discord?.isReady() || !scheduler?.isReady()))
         throw new Error("Discord runtime is not ready");
+      if (instantSettings.instantsEnabled && !voiceQueue.isRuntimeAvailable())
+        throw new Error("Instant voice runtime is not ready");
       return {
         status: "ok",
         checks: {
           database: "up",
           discord: discordEnabled ? "up" : "disabled",
-          scheduler: discordEnabled ? "up" : "disabled"
+          scheduler: discordEnabled ? "up" : "disabled",
+          instants: instantSettings.instantsEnabled ? "up" : "disabled"
         }
       };
     } catch (error) {

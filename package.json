@@ -28,6 +28,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "@fastify/static": "10.1.4",
     "@nestjs/axios": "12.0.1",
     "@nestjs/common": "12.1.0",
@@ -40,6 +41,7 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "axios": "1.20.0",
+    "cheerio": "^1.2.0",
     "discord-api-types": "0.37.120",
     "discord.js": "14.27.0",
     "dotenv": "17.2.3",

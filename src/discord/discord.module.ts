@@ -5,6 +5,10 @@ import { NecordModule, type NecordModuleOptions } from "necord";
 import { AdminModule } from "../admin/admin.module.js";
 import type { Environment } from "../config/environment.js";
 import { StreamersModule } from "../streamers/streamers.module.js";
+import { InstantsModule } from "../instants/instants.module.js";
+import { InstantAccessGuard } from "../instants/instant-access/instant-access.guard.js";
+import { InstantCommands } from "../instants/instant-commands/instant-commands.js";
+import { InstantManagerGuard } from "../instants/instant-manager/instant-manager.guard.js";
 import {
   ConfigCommands,
   DiscordCommands,
@@ -18,6 +22,7 @@ import { GuildManagerGuard } from "./guild-manager.guard.js";
   imports: [
     AdminModule,
     StreamersModule,
+    InstantsModule,
     NecordModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -25,7 +30,7 @@ import { GuildManagerGuard } from "./guild-manager.guard.js";
         const developmentGuild = config.get("DISCORD_DEVELOPMENT_GUILD_ID", { infer: true });
         return {
           token: config.get("DISCORD_TOKEN", { infer: true })!,
-          intents: [GatewayIntentBits.Guilds],
+          intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
           development: developmentGuild ? [developmentGuild] : false
         };
       }
@@ -37,6 +42,9 @@ import { GuildManagerGuard } from "./guild-manager.guard.js";
     DiscordCommands,
     ConfigCommands,
     StreamerCommands,
+    InstantCommands,
+    InstantAccessGuard,
+    InstantManagerGuard,
     GuildManagerGuard
   ],
   exports: [DiscordService]

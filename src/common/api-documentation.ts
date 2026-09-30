@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   BotActivityType,
   GuildMembershipState,
+  InstantAccessMode,
   NotificationStatus,
   StreamPlatform
 } from "../generated/prisma/enums.js";
@@ -113,6 +114,81 @@ export const botSettingsResponseSchema = z.object({
   defaultStatusEnabled: z.boolean(),
   defaultStatusText: z.string().nullable(),
   defaultActivityType: z.enum(BotActivityType).nullable(),
+  instantsEnabled: z.boolean(),
+  instantAccessMode: z.enum(InstantAccessMode),
+  createdAt: dateTimeSchema,
+  updatedAt: dateTimeSchema
+});
+
+export const instantLimitsResponseSchema = z.object({
+  maxAudioBytes: z.number().int().positive(),
+  maxDurationSeconds: z.number().int().positive(),
+  maxQueueLength: z.number().int().positive(),
+  userCooldownSeconds: z.number().int().nonnegative(),
+  maxActiveGuilds: z.number().int().positive(),
+  idleDisconnectSeconds: z.number().int().positive()
+});
+
+export const instantSettingsResponseSchema = z.object({
+  enabled: z.boolean(),
+  accessMode: z.enum(InstantAccessMode),
+  limits: instantLimitsResponseSchema
+});
+
+export const instantCapabilitiesResponseSchema = instantSettingsResponseSchema.extend({
+  canPlay: z.boolean(),
+  voiceRuntimeAvailable: z.boolean()
+});
+
+export const instantSearchResultResponseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  pageUrl: z.url()
+});
+
+export const instantVoiceChannelResponseSchema = z.object({
+  id: snowflakeSchema,
+  name: z.string(),
+  type: z.number().int(),
+  memberCount: z.number().int().nonnegative()
+});
+
+export const instantQueueItemResponseSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  pageUrl: z.url(),
+  requestedByDiscordUserId: snowflakeSchema,
+  requestedVia: z.enum(["DASHBOARD", "DISCORD"]),
+  voiceChannelId: snowflakeSchema,
+  state: z.enum(["QUEUED", "PLAYING"]),
+  enqueuedAt: dateTimeSchema,
+  position: z.number().int().nonnegative()
+});
+
+export const instantEnqueueResponseSchema = z.object({
+  item: instantQueueItemResponseSchema,
+  position: z.number().int().nonnegative(),
+  startsImmediately: z.boolean()
+});
+
+export const instantQueueStatusResponseSchema = z.object({
+  connectionState: z.enum(["IDLE", "CONNECTING", "READY", "PLAYING"]),
+  voiceChannelId: snowflakeSchema.nullable(),
+  current: instantQueueItemResponseSchema.nullable(),
+  items: z.array(instantQueueItemResponseSchema),
+  idleDisconnectAt: dateTimeSchema.nullable(),
+  lastError: z
+    .object({ code: z.string(), message: z.string(), occurredAt: dateTimeSchema })
+    .nullable()
+});
+
+export const instantAllowedUserResponseSchema = z.object({
+  discordId: snowflakeSchema,
+  username: z.string().nullable(),
+  globalName: z.string().nullable(),
+  avatarHash: z.string().nullable(),
+  avatarUrl: z.url().nullable(),
+  addedByDiscordUserId: snowflakeSchema,
   createdAt: dateTimeSchema,
   updatedAt: dateTimeSchema
 });
@@ -144,7 +220,8 @@ export const readinessResponseSchema = z.object({
   checks: z.object({
     database: z.literal("up"),
     discord: z.enum(["up", "disabled"]),
-    scheduler: z.enum(["up", "disabled"])
+    scheduler: z.enum(["up", "disabled"]),
+    instants: z.enum(["up", "disabled"])
   })
 });
 

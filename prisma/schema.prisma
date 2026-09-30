@@ -31,6 +31,11 @@ enum GuildMembershipState {
   LEFT
 }
 
+enum InstantAccessMode {
+  EVERYONE
+  ALLOWLIST_ONLY
+}
+
 model DiscordGuild {
   id                     String               @id
   name                   String?
@@ -98,15 +103,29 @@ model Notification {
 }
 
 model BotSettings {
-  id                      String           @id @default("default")
-  allowlistEnforced       Boolean          @default(false)
-  rotationEnabled         Boolean          @default(true)
-  rotationIntervalSeconds Int              @default(60)
-  defaultStatusEnabled    Boolean          @default(true)
+  id                      String            @id @default("default")
+  allowlistEnforced       Boolean           @default(false)
+  rotationEnabled         Boolean           @default(true)
+  rotationIntervalSeconds Int               @default(60)
+  defaultStatusEnabled    Boolean           @default(true)
   defaultStatusText       String?
   defaultActivityType     BotActivityType?
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
+  instantsEnabled         Boolean           @default(false)
+  instantAccessMode       InstantAccessMode @default(EVERYONE)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+}
+
+model InstantAllowedUser {
+  discordId            String   @id
+  username             String?
+  globalName           String?
+  avatarHash           String?
+  addedByDiscordUserId String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 model PresenceMessage {

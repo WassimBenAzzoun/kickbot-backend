@@ -4,6 +4,8 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrismaService } from "../../src/database/prisma.service.js";
 import { HealthController } from "../../src/health/health/health.controller.js";
+import { InstantAccessService } from "../../src/instants/instant-access/instant-access.service.js";
+import { VoiceQueueService } from "../../src/instants/voice-queue/voice-queue.service.js";
 
 describe("health endpoints", () => {
   let app: NestFastifyApplication;
@@ -16,7 +18,12 @@ describe("health endpoints", () => {
         {
           provide: ConfigService,
           useValue: { get: vi.fn((key: string) => (key === "DISCORD_ENABLED" ? false : undefined)) }
-        }
+        },
+        {
+          provide: InstantAccessService,
+          useValue: { settings: vi.fn(async () => ({ instantsEnabled: false })) }
+        },
+        { provide: VoiceQueueService, useValue: { isRuntimeAvailable: vi.fn(() => false) } }
       ]
     }).compile();
     app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -37,7 +44,8 @@ describe("health endpoints", () => {
     expect(ready.json().checks).toEqual({
       database: "up",
       discord: "disabled",
-      scheduler: "disabled"
+      scheduler: "disabled",
+      instants: "disabled"
     });
   });
 });

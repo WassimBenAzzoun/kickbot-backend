@@ -20,6 +20,7 @@ import { KickModule } from "./kick/kick.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { SchedulingModule } from "./scheduling/scheduling.module.js";
 import { StreamersModule } from "./streamers/streamers.module.js";
+import { InstantsModule } from "./instants/instants.module.js";
 
 const runtimeModules = process.env.DISCORD_ENABLED === "false" ? [] : [SchedulingModule];
 
@@ -47,7 +48,8 @@ const runtimeModules = process.env.DISCORD_ENABLED === "false" ? [] : [Schedulin
     AdminModule,
     KickModule,
     HealthModule,
-    ...runtimeModules
+    ...runtimeModules,
+    InstantsModule
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

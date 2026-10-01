@@ -45,7 +45,8 @@ describe("health endpoints", () => {
       database: "up",
       discord: "disabled",
       scheduler: "disabled",
-      instants: "disabled"
+      instants: "disabled",
+      music: "disabled"
     });
   });
 });

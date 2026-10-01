@@ -21,6 +21,8 @@ import { NotificationsModule } from "./notifications/notifications.module.js";
 import { SchedulingModule } from "./scheduling/scheduling.module.js";
 import { StreamersModule } from "./streamers/streamers.module.js";
 import { InstantsModule } from "./instants/instants.module.js";
+import { MusicModule } from "./music/music.module.js";
+import { VoiceModule } from "./voice/voice.module.js";
 
 const runtimeModules = process.env.DISCORD_ENABLED === "false" ? [] : [SchedulingModule];
 
@@ -40,6 +42,7 @@ const runtimeModules = process.env.DISCORD_ENABLED === "false" ? [] : [Schedulin
       })
     }),
     ScheduleModule.forRoot(),
+    VoiceModule,
     DatabaseModule,
     AuthModule,
     GuildsModule,
@@ -49,7 +52,8 @@ const runtimeModules = process.env.DISCORD_ENABLED === "false" ? [] : [Schedulin
     KickModule,
     HealthModule,
     ...runtimeModules,
-    InstantsModule
+    InstantsModule,
+    MusicModule
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

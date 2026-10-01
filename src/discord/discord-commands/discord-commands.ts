@@ -56,7 +56,9 @@ export class DiscordCommands {
         "`/config channel` – choose the live-alert channel",
         "`/config view` – show this server's configuration",
         "`/streamer add|remove|enable|disable|list` – manage tracked Kick channels",
-        "`/instant play|search|queue|stop` – play Myinstants sounds in voice"
+        "`/instant play|search|queue|stop` – play Myinstants sounds in voice",
+        "`/play url` – queue a YouTube or Spotify URL",
+        "`/music queue|pause|resume|skip|stop` – control music playback"
       ].join("\n"),
       flags: MessageFlags.Ephemeral
     });

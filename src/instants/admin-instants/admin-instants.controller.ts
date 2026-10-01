@@ -13,6 +13,7 @@ import {
 import { ApiCookieAuth, ApiNoContentResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import { GlobalAdminGuard } from "../../admin/global-admin.guard.js";
+import { ModuleRef } from "@nestjs/core";
 import type { AuthenticatedRequest } from "../../auth/auth.types.js";
 import { SessionGuard } from "../../auth/session.guard.js";
 import {
@@ -25,6 +26,7 @@ import {
 import { InstantAccessMode } from "../../generated/prisma/enums.js";
 import { InstantAccessService } from "../instant-access/instant-access.service.js";
 import { VoiceQueueService } from "../voice-queue/voice-queue.service.js";
+import { DiscordVoiceService } from "../../voice/discord-voice.service.js";
 
 const settingsPatchSchema = z.object({
   enabled: z.boolean().optional(),
@@ -41,7 +43,9 @@ const allowedUserCollectionSchema = collectionResponseSchema(instantAllowedUserR
 export class AdminInstantsController {
   public constructor(
     private readonly access: InstantAccessService,
-    private readonly voice: VoiceQueueService
+    private readonly voice: VoiceQueueService,
+    private readonly discordVoice: DiscordVoiceService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   @Get("settings")
@@ -66,7 +70,12 @@ export class AdminInstantsController {
       ...(body.enabled === undefined ? {} : { instantsEnabled: body.enabled }),
       ...(body.accessMode === undefined ? {} : { instantAccessMode: body.accessMode })
     });
-    if (body.enabled === false) this.voice.stopAll();
+    if (body.enabled === false) {
+      this.voice.stopAll();
+      const { MusicQueueService } = await import("../../music/music-queue/music-queue.service.js");
+      this.moduleRef.get(MusicQueueService, { strict: false }).stopAll();
+      this.discordVoice.destroyAll();
+    }
     return {
       enabled: settings.instantsEnabled,
       accessMode: settings.instantAccessMode,

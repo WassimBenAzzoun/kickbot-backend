@@ -7,11 +7,12 @@ import { AdminInstantsController } from "./admin-instants/admin-instants.control
 import { InstantAccessService } from "./instant-access/instant-access.service.js";
 import { MyinstantsService } from "./myinstants/myinstants.service.js";
 import { VoiceQueueService } from "./voice-queue/voice-queue.service.js";
+import { InstantAccessGuard } from "./instant-access/instant-access.guard.js";
 
 @Module({
   imports: [HttpModule, AdminModule, GuildsModule],
   controllers: [InstantsController, AdminInstantsController],
-  providers: [InstantAccessService, MyinstantsService, VoiceQueueService],
-  exports: [InstantAccessService, MyinstantsService, VoiceQueueService]
+  providers: [InstantAccessService, InstantAccessGuard, MyinstantsService, VoiceQueueService],
+  exports: [InstantAccessService, InstantAccessGuard, MyinstantsService, VoiceQueueService]
 })
 export class InstantsModule {}

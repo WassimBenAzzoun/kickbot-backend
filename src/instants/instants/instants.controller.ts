@@ -138,7 +138,7 @@ export class InstantsController {
 
   @Delete("queue")
   @HttpCode(204)
-  @ApiOperation({ summary: "Stop instant playback, clear the queue, and leave voice" })
+  @ApiOperation({ summary: "Stop instant playback and clear only the instant queue" })
   @ApiNoContentResponse({ description: "Instant playback stopped." })
   public async stop(
     @Param({ schema: guildParamsSchema }) params: z.infer<typeof guildParamsSchema>,

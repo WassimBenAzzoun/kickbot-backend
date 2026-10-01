@@ -14,6 +14,7 @@ import { DiscordService } from "../../discord/discord/discord.service.js";
 import { SchedulingService } from "../../scheduling/scheduling/scheduling.service.js";
 import { InstantAccessService } from "../../instants/instant-access/instant-access.service.js";
 import { VoiceQueueService } from "../../instants/voice-queue/voice-queue.service.js";
+import { MusicQueueService } from "../../music/music-queue/music-queue.service.js";
 
 @Controller("health")
 @ApiTags("Health")
@@ -52,13 +53,18 @@ export class HealthController {
         throw new Error("Discord runtime is not ready");
       if (instantSettings.instantsEnabled && !voiceQueue.isRuntimeAvailable())
         throw new Error("Instant voice runtime is not ready");
+      if (instantSettings.instantsEnabled) {
+        const musicQueue = this.moduleRef.get(MusicQueueService, { strict: false });
+        if (!musicQueue.isRuntimeAvailable()) throw new Error("Music runtime is not ready");
+      }
       return {
         status: "ok",
         checks: {
           database: "up",
           discord: discordEnabled ? "up" : "disabled",
           scheduler: discordEnabled ? "up" : "disabled",
-          instants: instantSettings.instantsEnabled ? "up" : "disabled"
+          instants: instantSettings.instantsEnabled ? "up" : "disabled",
+          music: instantSettings.instantsEnabled ? "up" : "disabled"
         }
       };
     } catch (error) {

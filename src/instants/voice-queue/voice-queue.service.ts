@@ -1,24 +1,11 @@
-import {
-  AudioPlayerStatus,
-  NoSubscriberBehavior,
-  StreamType,
-  VoiceConnectionStatus,
-  createAudioPlayer,
-  createAudioResource,
-  entersState,
-  getVoiceConnection,
-  joinVoiceChannel,
-  type AudioPlayer,
-  type VoiceConnection
-} from "@discordjs/voice";
+import { StreamType, createAudioResource } from "@discordjs/voice";
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ModuleRef } from "@nestjs/core";
-import { ChannelType, Client, PermissionFlagsBits, type VoiceBasedChannel } from "discord.js";
-import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { ApiError } from "../../common/api-error.js";
 import type { Environment } from "../../config/environment.js";
+import { DiscordVoiceService } from "../../voice/discord-voice.service.js";
 import { InstantAccessService } from "../instant-access/instant-access.service.js";
 import type {
   InstantLimits,
@@ -31,16 +18,12 @@ import type {
 } from "../instants.types.js";
 import { MyinstantsService } from "../myinstants/myinstants.service.js";
 
-interface GuildVoiceSession {
+interface InstantSession {
   guildId: string;
   channelId: string;
-  connection: VoiceConnection;
-  player: AudioPlayer;
   queue: InstantQueueItem[];
   current: InstantQueueItem | null;
   processing: boolean;
-  idleTimer: NodeJS.Timeout | null;
-  idleDisconnectAt: Date | null;
   lastError: InstantQueueFailure | null;
   transcoder: ChildProcessWithoutNullStreams | null;
 }
@@ -48,16 +31,16 @@ interface GuildVoiceSession {
 @Injectable()
 export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(VoiceQueueService.name);
-  private readonly sessions = new Map<string, GuildVoiceSession>();
+  private readonly sessions = new Map<string, InstantSession>();
   private readonly cooldowns = new Map<string, number>();
   private readonly guildLocks = new Map<string, Promise<void>>();
   private ffprobeAvailable = false;
 
   public constructor(
-    private readonly moduleRef: ModuleRef,
     private readonly config: ConfigService<Environment, true>,
     private readonly provider: MyinstantsService,
-    private readonly access: InstantAccessService
+    private readonly access: InstantAccessService,
+    private readonly voice: DiscordVoiceService
   ) {}
 
   public async onModuleInit(): Promise<void> {
@@ -83,33 +66,11 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
   }
 
   public isRuntimeAvailable(): boolean {
-    return this.ffprobeAvailable && Boolean(this.client()?.isReady());
+    return this.ffprobeAvailable && this.voice.isReady();
   }
 
-  public async listVoiceChannels(guildId: string) {
-    const client = this.requireClient();
-    const guild = await client.guilds.fetch(guildId);
-    const me = guild.members.me ?? (await guild.members.fetchMe());
-    const channels = await guild.channels.fetch();
-    return [...channels.values()]
-      .filter((channel): channel is VoiceBasedChannel => {
-        if (!channel || channel.type !== ChannelType.GuildVoice) return false;
-        const permissions = channel.permissionsFor(me);
-        return Boolean(
-          permissions?.has([
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.Connect,
-            PermissionFlagsBits.Speak
-          ]) && channel.joinable
-        );
-      })
-      .sort((left, right) => left.position - right.position)
-      .map((channel) => ({
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        memberCount: channel.members.size
-      }));
+  public listVoiceChannels(guildId: string) {
+    return this.voice.listVoiceChannels(guildId);
   }
 
   public async enqueue(input: {
@@ -128,30 +89,29 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
         );
       }
       await this.access.requireCanPlay(input.requestedByDiscordUserId, input.guildId);
-      await this.requireVoiceChannel(input.guildId, input.voiceChannelId);
       this.enforceCooldown(input.guildId, input.requestedByDiscordUserId);
+      await this.voice.acquire(input.guildId, input.voiceChannelId);
 
       let session = this.sessions.get(input.guildId);
-      if (session && session.channelId !== input.voiceChannelId) {
-        if (session.current || session.queue.length > 0) {
-          throw new ApiError(
-            409,
-            "VOICE_CHANNEL_BUSY",
-            "The bot is already playing in another voice channel"
-          );
-        }
-        this.destroySession(session);
-        session = undefined;
+      if (!session) {
+        session = {
+          guildId: input.guildId,
+          channelId: input.voiceChannelId,
+          queue: [],
+          current: null,
+          processing: false,
+          lastError: null,
+          transcoder: null
+        };
+        this.sessions.set(input.guildId, session);
       }
-      if (!session) session = await this.createSession(input.guildId, input.voiceChannelId);
-
-      const limits = this.limits();
-      if (session.queue.length >= limits.maxQueueLength) {
+      session.channelId = input.voiceChannelId;
+      if (session.queue.length >= this.limits().maxQueueLength) {
         throw new ApiError(429, "INSTANT_QUEUE_FULL", "The instant queue is full");
       }
-      this.cancelIdleDisconnect(session);
+
       const startsImmediately =
-        session.current === null && !session.processing && session.queue.length === 0;
+        !session.current && !session.processing && session.queue.length === 0;
       const item: InstantQueueItem = {
         id: randomUUID(),
         title: input.instant.title,
@@ -164,122 +124,53 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
         enqueuedAt: new Date()
       };
       session.queue.push(item);
-      const position =
-        session.current || session.processing
-          ? session.queue.length
-          : Math.max(0, session.queue.length - 1);
-      void this.processNext(session);
+      this.voice.markBusy(input.guildId, "instant", true);
+      const position = startsImmediately ? 0 : session.queue.length;
+      void this.processQueue(session);
       return { item: this.publicItem(item, position), position, startsImmediately };
     });
   }
 
   public status(guildId: string): InstantQueueStatus {
     const session = this.sessions.get(guildId);
+    const voiceStatus = this.voice.status(guildId);
     if (!session) {
-      return {
-        connectionState: "IDLE",
-        voiceChannelId: null,
-        current: null,
-        items: [],
-        idleDisconnectAt: null,
-        lastError: null
-      };
+      return { ...voiceStatus, current: null, items: [], lastError: null };
     }
     if (session.lastError && Date.now() - session.lastError.occurredAt.getTime() > 60_000) {
       session.lastError = null;
     }
     return {
-      connectionState: session.current
-        ? "PLAYING"
-        : session.connection.state.status === VoiceConnectionStatus.Ready
-          ? "READY"
-          : "CONNECTING",
-      voiceChannelId: session.channelId,
+      ...voiceStatus,
       current: session.current ? this.publicItem(session.current, 0) : null,
       items: session.queue.map((item, index) => this.publicItem(item, index + 1)),
-      idleDisconnectAt: session.idleDisconnectAt,
       lastError: session.lastError
     };
   }
 
   public stopGuild(guildId: string): void {
     const session = this.sessions.get(guildId);
-    if (session) this.destroySession(session);
+    if (session) {
+      session.queue.length = 0;
+      session.current = null;
+      this.stopTranscoder(session);
+      this.sessions.delete(guildId);
+    }
+    this.voice.stopInstant(guildId);
+    this.voice.markBusy(guildId, "instant", false);
+    this.voice.scheduleDisconnectIfIdle(guildId);
   }
 
   public stopAll(): void {
-    for (const session of this.sessions.values()) this.destroySession(session);
+    for (const guildId of this.sessions.keys()) this.stopGuild(guildId);
   }
 
-  private async createSession(guildId: string, channelId: string): Promise<GuildVoiceSession> {
-    if (this.sessions.size >= this.limits().maxActiveGuilds) {
-      throw new ApiError(429, "VOICE_CAPACITY_REACHED", "All instant voice sessions are busy");
-    }
-    const channel = await this.requireVoiceChannel(guildId, channelId);
-    getVoiceConnection(guildId)?.destroy();
-    const connection = joinVoiceChannel({
-      guildId,
-      channelId,
-      adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: true,
-      selfMute: false
-    });
-    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
-    const session: GuildVoiceSession = {
-      guildId,
-      channelId,
-      connection,
-      player,
-      queue: [],
-      current: null,
-      processing: false,
-      idleTimer: null,
-      idleDisconnectAt: null,
-      lastError: null,
-      transcoder: null
-    };
-    player.on(AudioPlayerStatus.Idle, () => {
-      if (!session.current) return;
-      this.stopTranscoder(session);
-      session.current = null;
-      void this.processNext(session);
-    });
-    player.on("error", (error) => {
-      this.logger.error(`Instant playback failed in guild ${guildId}: ${error.message}`);
-      session.lastError = {
-        code: "INSTANT_PLAYBACK_FAILED",
-        message: "The instant could not be played",
-        occurredAt: new Date()
-      };
-      this.stopTranscoder(session);
-      session.current = null;
-      void this.processNext(session);
-    });
-    connection.on("error", (error) => {
-      this.logger.error(`Discord voice connection failed in guild ${guildId}: ${error.message}`);
-      session.lastError = {
-        code: "VOICE_CONNECTION_FAILED",
-        message: "The Discord voice connection failed",
-        occurredAt: new Date()
-      };
-    });
-    connection.subscribe(player);
-    try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-    } catch {
-      connection.destroy();
-      throw new ApiError(502, "VOICE_CONNECTION_FAILED", "Could not join the voice channel");
-    }
-    this.sessions.set(guildId, session);
-    return session;
-  }
-
-  private async processNext(session: GuildVoiceSession): Promise<void> {
-    if (session.processing || session.current || !this.sessions.has(session.guildId)) return;
+  private async processQueue(session: InstantSession): Promise<void> {
+    if (session.processing || !this.sessions.has(session.guildId)) return;
     session.processing = true;
-    this.cancelIdleDisconnect(session);
+    this.voice.beginInstantMode(session.guildId);
     try {
-      while (session.queue.length > 0) {
+      while (session.queue.length > 0 && this.sessions.has(session.guildId)) {
         const item = session.queue.shift()!;
         if (!(await this.access.canPlay(item.requestedByDiscordUserId, session.guildId))) continue;
         try {
@@ -308,25 +199,16 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
           );
           session.transcoder = transcoder;
           transcoder.stderr.resume();
-          transcoder.once("error", (error) => {
-            this.logger.error(`FFmpeg failed in guild ${session.guildId}: ${error.message}`);
-            session.player.stop(true);
-          });
-          transcoder.stdin.on("error", (error) => {
-            this.logger.warn(
-              `FFmpeg input closed early in guild ${session.guildId}: ${error.message}`
-            );
-            session.player.stop(true);
-          });
+          transcoder.stdin.on("error", () => undefined);
           transcoder.stdin.end(audio);
-          const resource = createAudioResource(transcoder.stdout, {
-            inputType: StreamType.OggOpus,
-            metadata: item
-          });
-          session.player.play(resource);
-          return;
+          await this.voice.playInstant(
+            session.guildId,
+            createAudioResource(transcoder.stdout, {
+              inputType: StreamType.OggOpus,
+              metadata: item
+            })
+          );
         } catch (error) {
-          session.current = null;
           const apiError = error instanceof ApiError ? error : undefined;
           session.lastError = {
             code: apiError?.code ?? "INSTANT_PLAYBACK_FAILED",
@@ -334,71 +216,22 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
             occurredAt: new Date()
           };
           this.logger.warn(`Skipped instant ${item.id}: ${String(error)}`);
+        } finally {
+          this.stopTranscoder(session);
+          session.current = null;
         }
       }
-      this.scheduleIdleDisconnect(session);
     } finally {
       session.processing = false;
+      this.voice.endInstantMode(session.guildId);
+      this.voice.markBusy(session.guildId, "instant", false);
+      this.voice.scheduleDisconnectIfIdle(session.guildId);
     }
   }
 
-  private scheduleIdleDisconnect(session: GuildVoiceSession): void {
-    if (session.idleTimer || session.current || session.queue.length > 0) return;
-    const delayMs = this.limits().idleDisconnectSeconds * 1_000;
-    session.idleDisconnectAt = new Date(Date.now() + delayMs);
-    session.idleTimer = setTimeout(() => this.destroySession(session), delayMs);
-    session.idleTimer.unref();
-  }
-
-  private cancelIdleDisconnect(session: GuildVoiceSession): void {
-    if (session.idleTimer) clearTimeout(session.idleTimer);
-    session.idleTimer = null;
-    session.idleDisconnectAt = null;
-  }
-
-  private destroySession(session: GuildVoiceSession): void {
-    this.cancelIdleDisconnect(session);
-    session.queue.length = 0;
-    session.current = null;
-    this.stopTranscoder(session);
-    session.player.stop(true);
-    if (session.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-      session.connection.destroy();
-    }
-    this.sessions.delete(session.guildId);
-  }
-
-  private stopTranscoder(session: GuildVoiceSession): void {
-    if (session.transcoder && !session.transcoder.killed) session.transcoder.kill();
+  private stopTranscoder(session: InstantSession): void {
+    if (session.transcoder && !session.transcoder.killed) session.transcoder.kill("SIGKILL");
     session.transcoder = null;
-  }
-
-  private async requireVoiceChannel(
-    guildId: string,
-    channelId: string
-  ): Promise<VoiceBasedChannel> {
-    const guild = await this.requireClient().guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel || channel.type !== ChannelType.GuildVoice) {
-      throw new ApiError(400, "INVALID_VOICE_CHANNEL", "Choose a normal Discord voice channel");
-    }
-    const me = guild.members.me ?? (await guild.members.fetchMe());
-    const permissions = channel.permissionsFor(me);
-    if (
-      !permissions?.has([
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.Connect,
-        PermissionFlagsBits.Speak
-      ]) ||
-      !channel.joinable
-    ) {
-      throw new ApiError(
-        403,
-        "VOICE_PERMISSION_MISSING",
-        "The bot needs View Channel, Connect, and Speak in that channel"
-      );
-    }
-    return channel;
   }
 
   private enforceCooldown(guildId: string, discordId: string): void {
@@ -430,39 +263,37 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
       );
       let output = "";
       let settled = false;
-      const fail = (error: ApiError): void => {
+      const finish = (error?: ApiError, value?: number): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        reject(error);
+        if (error) reject(error);
+        else resolve(value!);
       };
       const timer = setTimeout(() => {
-        process.kill();
-        fail(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe timed out"));
+        process.kill("SIGKILL");
+        finish(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe timed out"));
       }, 8_000);
       process.stdout.on("data", (chunk: Buffer) => {
         output += chunk.toString("utf8");
       });
-      process.once("error", () => {
-        fail(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe is unavailable"));
-      });
-      process.stdin.on("error", () => {
-        fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
-      });
+      process.once("error", () =>
+        finish(new ApiError(503, "VOICE_RUNTIME_UNAVAILABLE", "ffprobe is unavailable"))
+      );
+      process.stdin.on("error", () =>
+        finish(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"))
+      );
       process.once("close", (code) => {
-        if (settled) return;
-        if (code !== 0) {
-          fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
-          return;
-        }
+        if (code !== 0)
+          return finish(
+            new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read")
+          );
         const value = totalPacketDuration(output);
-        if (value === null) {
-          fail(new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read"));
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
+        if (value === null)
+          return finish(
+            new ApiError(400, "INVALID_INSTANT_AUDIO", "Audio duration could not be read")
+          );
+        finish(undefined, value);
       });
       process.stdin.end(buffer);
     });
@@ -479,7 +310,7 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
     return new Promise<boolean>((resolve) => {
       const process = spawn("ffprobe", ["-version"], { stdio: "ignore" });
       const timer = setTimeout(() => {
-        process.kill();
+        process.kill("SIGKILL");
         resolve(false);
       }, 3_000);
       process.once("error", () => {
@@ -496,22 +327,6 @@ export class VoiceQueueService implements OnModuleInit, OnApplicationShutdown {
   private publicItem(item: InstantQueueItem, position: number): PublicInstantQueueItem {
     const { audioUrl: _audioUrl, ...safe } = item;
     return { ...safe, position };
-  }
-
-  private client(): Client | undefined {
-    try {
-      return this.moduleRef.get(Client, { strict: false });
-    } catch {
-      return undefined;
-    }
-  }
-
-  private requireClient(): Client {
-    const client = this.client();
-    if (!client?.isReady()) {
-      throw new ApiError(503, "DISCORD_NOT_READY", "Discord is not ready");
-    }
-    return client;
   }
 
   private async withGuildLock<T>(guildId: string, operation: () => Promise<T>): Promise<T> {

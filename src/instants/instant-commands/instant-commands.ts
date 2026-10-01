@@ -154,12 +154,12 @@ export class InstantCommands implements OnApplicationShutdown {
     await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
   }
 
-  @Subcommand({ name: "stop", description: "Stop playback, clear the queue, and leave voice" })
+  @Subcommand({ name: "stop", description: "Stop and clear Instants without stopping music" })
   @UseGuards(InstantManagerGuard)
   public async stop(@Context() [interaction]: SlashCommandContext): Promise<void> {
     this.voice.stopGuild(interaction.guildId!);
     await interaction.reply({
-      content: "Instant playback stopped and the queue was cleared.",
+      content: "Instant playback stopped and its queue was cleared.",
       flags: MessageFlags.Ephemeral
     });
   }

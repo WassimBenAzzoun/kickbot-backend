@@ -182,6 +182,67 @@ export const instantQueueStatusResponseSchema = z.object({
     .nullable()
 });
 
+export const musicLimitsResponseSchema = z.object({
+  maxDurationSeconds: z.number().int().positive(),
+  maxPlaylistItems: z.number().int().positive(),
+  maxQueueLength: z.number().int().positive(),
+  maxActiveGuilds: z.number().int().positive()
+});
+
+export const musicCapabilitiesResponseSchema = z.object({
+  enabled: z.boolean(),
+  accessMode: z.enum(InstantAccessMode),
+  canPlay: z.boolean(),
+  voiceRuntimeAvailable: z.boolean(),
+  spotifyAvailable: z.boolean(),
+  limits: musicLimitsResponseSchema
+});
+
+export const musicQueueItemResponseSchema = z.object({
+  id: z.uuid(),
+  sourceId: z.string(),
+  title: z.string(),
+  artist: z.string().nullable(),
+  provider: z.enum(["YOUTUBE", "SPOTIFY"]),
+  originalUrl: z.url(),
+  resolvedYouTubeUrl: z.url(),
+  thumbnailUrl: z.url().nullable(),
+  durationSeconds: z.number().int().positive(),
+  requestedByDiscordUserId: snowflakeSchema,
+  requestedVia: z.enum(["DASHBOARD", "DISCORD"]),
+  voiceChannelId: snowflakeSchema,
+  state: z.enum(["QUEUED", "PLAYING", "PAUSED"]),
+  position: z.number().int().nonnegative(),
+  enqueuedAt: dateTimeSchema
+});
+
+export const rejectedMusicTrackResponseSchema = z.object({
+  sourceUrl: z.url(),
+  title: z.string().optional(),
+  code: z.string(),
+  message: z.string()
+});
+
+export const musicEnqueueResponseSchema = z.object({
+  accepted: z.array(musicQueueItemResponseSchema),
+  rejected: z.array(rejectedMusicTrackResponseSchema),
+  truncated: z.boolean()
+});
+
+export const musicQueueStatusResponseSchema = z.object({
+  connectionState: z.enum(["IDLE", "CONNECTING", "READY", "PLAYING"]),
+  voiceChannelId: snowflakeSchema.nullable(),
+  current: musicQueueItemResponseSchema.nullable(),
+  items: z.array(musicQueueItemResponseSchema),
+  paused: z.boolean(),
+  interruptedByInstant: z.boolean(),
+  progressMs: z.number().int().nonnegative(),
+  idleDisconnectAt: dateTimeSchema.nullable(),
+  lastError: z
+    .object({ code: z.string(), message: z.string(), occurredAt: dateTimeSchema })
+    .nullable()
+});
+
 export const instantAllowedUserResponseSchema = z.object({
   discordId: snowflakeSchema,
   username: z.string().nullable(),
@@ -221,7 +282,8 @@ export const readinessResponseSchema = z.object({
     database: z.literal("up"),
     discord: z.enum(["up", "disabled"]),
     scheduler: z.enum(["up", "disabled"]),
-    instants: z.enum(["up", "disabled"])
+    instants: z.enum(["up", "disabled"]),
+    music: z.enum(["up", "disabled"])
   })
 });
 

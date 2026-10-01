@@ -60,6 +60,14 @@ export const environmentSchema = z
     INSTANT_MAX_ACTIVE_GUILDS: z.coerce.number().int().min(1).max(20).default(5),
     INSTANT_IDLE_DISCONNECT_SECONDS: z.coerce.number().int().min(1).max(300).default(30),
 
+    SPOTIFY_CLIENT_ID: optionalString(),
+    SPOTIFY_CLIENT_SECRET: optionalString(),
+    MUSIC_MAX_DURATION_SECONDS: z.coerce.number().int().min(60).max(43_200).default(7_200),
+    MUSIC_MAX_PLAYLIST_ITEMS: z.coerce.number().int().min(1).max(100).default(25),
+    MUSIC_MAX_QUEUE_LENGTH: z.coerce.number().int().min(1).max(200).default(50),
+    MUSIC_MAX_ACTIVE_GUILDS: z.coerce.number().int().min(1).max(20).default(2),
+    MUSIC_RESOLVE_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(60_000).default(20_000),
+
     FRONTEND_URL: z.url().default("http://localhost:3000"),
     CORS_ORIGINS: z.string().default("http://localhost:3000"),
     SESSION_ENCRYPTION_KEY: z.string().min(32),
@@ -79,6 +87,13 @@ export const environmentSchema = z
         code: "custom",
         path: ["DISCORD_TOKEN"],
         message: "DISCORD_TOKEN is required when DISCORD_ENABLED=true"
+      });
+    }
+    if (Boolean(value.SPOTIFY_CLIENT_ID) !== Boolean(value.SPOTIFY_CLIENT_SECRET)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.SPOTIFY_CLIENT_ID ? "SPOTIFY_CLIENT_SECRET" : "SPOTIFY_CLIENT_ID"],
+        message: "SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be configured together"
       });
     }
   });
